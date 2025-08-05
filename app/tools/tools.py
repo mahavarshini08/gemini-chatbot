@@ -102,25 +102,32 @@ class GetStudentPerformanceTool(BaseTool):
             # Limit to latest 5 contests
             recent_contests = student.get("recentContests", [])[:5]
             
-            student_info = {
-                "name": student.get("name"),
-                "leetcodeUsername": student.get("leetcodeUsername"),
-                "batch": batch,
-                "section": student.get("section"),
-                "rating": student.get("rating"),
-                "totalSolved": student.get("totalSolved"),
-                "easySolved": student.get("easySolved"),
-                "mediumSolved": student.get("mediumSolved"),
-                "hardSolved": student.get("hardSolved"),
-                "globalRanking": student.get("globalRanking"),
-                "totalParticipants": student.get("totalParticipants"),
-                "topPercentage": student.get("topPercentage"),
-                "badge": student.get("badge"),
-                "recentContests": recent_contests,
-                "note": "Only showing latest 5 contests as per system limitation"
-            }
+            # Check if student has any contest data
+            if not recent_contests:
+                return f"I cannot provide the latest contest details for {username} as there is no recent contest data available for this user in the system.\n\n**Available alternatives you can ask for:**\n1. Get student's overall performance (rating, problems solved)\n2. Get contest information and questions\n3. Get top students by rating and problems solved\n4. Get contest leaderboards for recent contests\n\n**💡 Tip:** Try asking for the student's overall performance instead."
             
-            return json.dumps(student_info, indent=2)
+            # Format response nicely
+            response = f"📊 **Student Performance: {student.get('name', username)}**\n"
+            response += f"📍 **Batch:** {batch}, **Section:** {student.get('section', 'N/A')}\n"
+            response += f"⭐ **Rating:** {student.get('rating', 'N/A')}\n"
+            response += f"📚 **Problems Solved:** {student.get('totalSolved', 0)} (Easy: {student.get('easySolved', 0)}, Medium: {student.get('mediumSolved', 0)}, Hard: {student.get('hardSolved', 0)})\n"
+            response += f"🏆 **Global Ranking:** {student.get('globalRanking', 'N/A')}\n"
+            response += f"📈 **Top Percentage:** {student.get('topPercentage', 'N/A')}%\n"
+            response += f"🎖️ **Badge:** {student.get('badge', 'N/A')}\n\n"
+            
+            response += f"🏆 **Latest Contest Performance (Last 5 contests):**\n"
+            for i, contest in enumerate(recent_contests, 1):
+                response += f"{i}. **{contest.get('title', 'Unknown Contest')}**\n"
+                response += f"   📅 Start Time: {contest.get('startTime', 'N/A')}\n"
+                response += f"   🏅 Ranking: {contest.get('ranking', 'N/A')}\n"
+                response += f"   ⭐ Rating: {contest.get('rating', 'N/A')}\n"
+                response += f"   ✅ Problems Solved: {contest.get('problemsSolved', 0)}/{contest.get('totalProblems', 0)}\n"
+                response += f"   🕒 Finish Time: {contest.get('finishTimeInSeconds', 'N/A')} seconds\n"
+                response += f"   📊 Trend: {contest.get('trendDirection', 'N/A')}\n\n"
+            
+            response += f"**Note:** Only showing latest 5 contests as per system limitation."
+            
+            return response
         except Exception as e:
             return f"Error fetching student performance: {str(e)}"
 
@@ -466,6 +473,154 @@ class GetContestLeaderboardTool(BaseTool):
         except Exception as e:
             return f"Error fetching contest leaderboard: {str(e)}"
 
+class GetCrossBatchContestLeaderboardTool(BaseTool):
+    """Tool to get contest leaderboard across all batches"""
+    name: str = "getCrossBatchContestLeaderboard"
+    description: str = "Get contest leaderboard across all batches for a specific contest. Input format: 'contest_title' (e.g., 'Weekly Contest 460')"
+    
+    def _run(self, input_str: str) -> str:
+        try:
+            contest_title = input_str.strip()
+            
+            # Get all batches first
+            batches_result = api_service.get_all_batches()
+            batches = batches_result.get("allBatches", [])
+            
+            if not batches:
+                return "No batches found in the system."
+            
+            all_participants = []
+            batch_breakdown = {}
+            
+            # Collect participants from all batches
+            for batch in batches:
+                try:
+                    leaderboard_result = api_service.get_contest_leaderboard(batch["name"], contest_title)
+                    participants = leaderboard_result.get("contestStatusLeaderboard", {}).get("participants", [])
+                    
+                    if participants:
+                        # Add batch information to each participant
+                        for participant in participants:
+                            participant["batch"] = batch["name"]
+                            all_participants.append(participant)
+                        
+                        batch_breakdown[batch["name"]] = len(participants)
+                except Exception as e:
+                    # Skip batches that fail
+                    continue
+            
+            if not all_participants:
+                return f"No participants found for contest '{contest_title}' across all batches."
+            
+            # Sort all participants by ranking
+            all_participants.sort(key=lambda x: x.get("contestRanking", float('inf')))
+            
+            # Format the response nicely
+            response = f"🏆 **Cross-Batch Contest Leaderboard: {contest_title}**\n\n"
+            response += f"**Total Participants:** {len(all_participants)}\n"
+            response += "**Breakdown by Batch:**\n"
+            
+            for batch_name, count in batch_breakdown.items():
+                response += f"• **{batch_name}**: {count} participants\n"
+            
+            response += f"\n**Top 15 Participants (All Batches):**\n"
+            
+            for i, participant in enumerate(all_participants[:15], 1):
+                contest_data = participant.get("contest", {})
+                name = participant.get('name') or participant.get('leetcodeUsername', 'Unknown Student')
+                response += f"{i}. **{name}** ({participant.get('leetcodeUsername', 'N/A')})\n"
+                response += f"   📍 Batch: {participant.get('batch', 'N/A')}, Section: {participant.get('section', 'N/A')}\n"
+                response += f"   🏅 Rank: {participant.get('contestRanking', 'N/A')}\n"
+                response += f"   ⭐ Rating: {participant.get('rating', 0):.2f}\n"
+                response += f"   📚 Problems Solved: {contest_data.get('problemsSolved', 0)}/{contest_data.get('totalProblems', 0)}\n"
+                response += f"   ⏱️ Finish Time: {contest_data.get('finishTimeInSeconds', 0)}s\n\n"
+            
+            if len(all_participants) > 15:
+                response += f"... and {len(all_participants) - 15} more participants\n\n"
+            
+            # Show highest ranking student
+            if all_participants:
+                top_student = all_participants[0]
+                contest_data = top_student.get("contest", {})
+                name = top_student.get('name') or top_student.get('leetcodeUsername', 'Unknown Student')
+                response += f"🥇 **Overall Highest Ranking Student:**\n"
+                response += f"**{name}** ({top_student.get('leetcodeUsername', 'N/A')})\n"
+                response += f"📍 Batch: {top_student.get('batch', 'N/A')}, Section: {top_student.get('section', 'N/A')}\n"
+                response += f"🏅 Rank: {top_student.get('contestRanking', 'N/A')}\n"
+                response += f"⭐ Rating: {top_student.get('rating', 0):.2f}\n"
+                response += f"📚 Problems Solved: {contest_data.get('problemsSolved', 0)}/{contest_data.get('totalProblems', 0)}\n"
+            
+            return response
+        except Exception as e:
+            return f"Error fetching cross-batch contest leaderboard: {str(e)}"
+
+class GetSectionContestLeaderboardTool(BaseTool):
+    """Tool to get contest leaderboard for a specific section"""
+    name: str = "getSectionContestLeaderboard"
+    description: str = "Get contest leaderboard for a specific section within a batch. Input format: 'batch_name,section_name,contest_title' (e.g., 'batch24-28,CSE-A,Weekly Contest 460')"
+    
+    def _run(self, input_str: str) -> str:
+        try:
+            parts = input_str.split(',')
+            if len(parts) != 3:
+                return "Error: Input format should be 'batch_name,section_name,contest_title' (e.g., 'batch24-28,CSE-A,Weekly Contest 460')"
+            
+            batch_name, section_name, contest_title = [s.strip() for s in parts]
+            
+            # Get contest leaderboard for the batch
+            leaderboard_result = api_service.get_contest_leaderboard(batch_name, contest_title)
+            
+            if not leaderboard_result:
+                return f"No leaderboard data found for contest '{contest_title}' in batch '{batch_name}'."
+            
+            participants = leaderboard_result.get("contestStatusLeaderboard", {}).get("participants", [])
+            
+            if not participants:
+                return f"No participants found for contest '{contest_title}' in batch '{batch_name}'."
+            
+            # Filter participants by section
+            section_participants = [
+                p for p in participants 
+                if p.get("section", "").upper() == section_name.upper()
+            ]
+            
+            if not section_participants:
+                return f"No participants found in section '{section_name}' for contest '{contest_title}' in batch '{batch_name}'."
+            
+            # Sort section participants by ranking
+            section_participants.sort(key=lambda x: x.get("contestRanking", float('inf')))
+            
+            # Format the response nicely
+            response = f"🏆 **Section Contest Leaderboard: {contest_title}**\n\n"
+            response += f"**Batch:** {batch_name}\n"
+            response += f"**Section:** {section_name}\n"
+            response += f"**Total Participants:** {len(section_participants)}\n\n"
+            response += "**All Section Participants:**\n"
+            
+            for i, participant in enumerate(section_participants, 1):
+                contest_data = participant.get("contest", {})
+                name = participant.get('name') or participant.get('leetcodeUsername', 'Unknown Student')
+                response += f"{i}. **{name}** ({participant.get('leetcodeUsername', 'N/A')})\n"
+                response += f"   🏅 Rank: {participant.get('contestRanking', 'N/A')}\n"
+                response += f"   ⭐ Rating: {participant.get('rating', 0):.2f}\n"
+                response += f"   📚 Problems Solved: {contest_data.get('problemsSolved', 0)}/{contest_data.get('totalProblems', 0)}\n"
+                response += f"   ⏱️ Finish Time: {contest_data.get('finishTimeInSeconds', 0)}s\n\n"
+            
+            # Show highest ranking student in section
+            if section_participants:
+                top_student = section_participants[0]
+                contest_data = top_student.get("contest", {})
+                name = top_student.get('name') or top_student.get('leetcodeUsername', 'Unknown Student')
+                response += f"🥇 **Top Student in {section_name}:**\n"
+                response += f"**{name}** ({top_student.get('leetcodeUsername', 'N/A')})\n"
+                response += f"🏅 Rank: {top_student.get('contestRanking', 'N/A')}\n"
+                response += f"⭐ Rating: {top_student.get('rating', 0):.2f}\n"
+                response += f"📚 Problems Solved: {contest_data.get('problemsSolved', 0)}/{contest_data.get('totalProblems', 0)}\n"
+            
+            return response
+        except Exception as e:
+            return f"Error fetching section contest leaderboard: {str(e)}"
+
 class MultiCollectionQueryTool(BaseTool):
     """Tool that can handle complex queries requiring multiple collections"""
     name: str = "multiCollectionQuery"
@@ -503,7 +658,20 @@ class MultiCollectionQueryTool(BaseTool):
                 return self._get_top_students(limit, batch)
             
             else:
-                return "I can help with:\n1. Total sections across all batches\n2. Contest information\n3. Student performance (latest 5 contests only)\n4. Top students by rating and problems solved\n\nPlease rephrase your question."
+                # Provide specific alternatives based on the query type
+                if "compare" in question_lower or "comparison" in question_lower:
+                    if "contest" in question_lower:
+                        return "🔍 **Query Analysis:** I cannot directly compare contest performance across batches.\n\n**Available alternatives you can ask for:**\n1. Get contest leaderboard for each batch separately\n2. Get contest information and questions\n3. Get student performance in latest 5 contests\n4. Get top students by rating and problems solved\n\n**💡 Tip:** Try asking for any of these alternatives instead."
+                    elif "problems" in question_lower or "solved" in question_lower:
+                        return "🔍 **Query Analysis:** I cannot directly compare problem-solving statistics across batches.\n\n**Available alternatives you can ask for:**\n1. Get top students by problems solved for each batch\n2. Get student performance with total problems solved\n3. Get contest leaderboard with problems solved\n4. Get section-wise top students by problems solved\n\n**💡 Tip:** Try asking for any of these alternatives instead."
+                    elif "rating" in question_lower:
+                        return "🔍 **Query Analysis:** I cannot directly compare rating statistics across batches.\n\n**Available alternatives you can ask for:**\n1. Get top students by rating for each batch\n2. Get student performance with current rating\n3. Get contest leaderboard with ratings\n4. Get section-wise top students by rating\n\n**💡 Tip:** Try asking for any of these alternatives instead."
+                    else:
+                        return "🔍 **Query Analysis:** I cannot perform direct comparisons across batches.\n\n**Available alternatives you can ask for:**\n1. Get data for individual batches\n2. Get total students across all batches\n3. Get contest information and questions\n4. Get top students by rating and problems solved\n\n**💡 Tip:** Try asking for any of these alternatives instead."
+                elif "across" in question_lower or "between" in question_lower:
+                                          return "🔍 **Query Analysis:** I cannot provide cross-batch analysis.\n\n**Available alternatives you can ask for:**\n1. Get total students across all batches\n2. Get total sections across all batches\n3. Get contest information and questions\n4. Get top students by rating and problems solved\n\n**💡 Tip:** Try asking for any of these alternatives instead."
+                else:
+                                          return "🔍 **Query Analysis:** I cannot directly answer your specific query.\n\n**Available alternatives you can ask for:**\n1. Get total students across all batches\n2. Get contest information and questions\n3. Get student performance (latest 5 contests only)\n4. Get top students by rating and problems solved\n5. Get contest leaderboards for specific batches\n6. Get section-specific data\n\n**💡 Tip:** Try asking for any of these alternatives instead."
                 
         except Exception as e:
             return f"Error processing multi-collection query: {str(e)}"
@@ -656,6 +824,49 @@ class MultiCollectionQueryTool(BaseTool):
         
         return limit, batch
 
+class GetAccurateTotalStudentsTool(BaseTool):
+    """Tool to get accurate total student count using registration data only"""
+    name: str = "getAccurateTotalStudents"
+    description: str = "Get accurate total student count across all batches using registration data. Use this when asked about total student count."
+    
+    def _run(self, input_str: str = "") -> str:
+        try:
+            batches_result = api_service.get_all_batches()
+            if not batches_result.get("allBatches"):
+                return "No batches found in the system."
+            
+            total_students = 0
+            batch_breakdown = []
+            
+            for batch_info in batches_result.get("allBatches", []):
+                batch_name = batch_info["name"]
+                
+                # Get student count from registration data only
+                try:
+                    students_result = api_service.get_students_by_batch(batch_name)
+                    student_count = len(students_result.get("students", []))
+                except Exception as e:
+                    student_count = 0
+                
+                total_students += student_count
+                batch_breakdown.append({
+                    "batch": batch_name,
+                    "students": student_count
+                })
+            
+            # Format the response nicely
+            response = f"📊 **Total Students: {total_students}**\n\n"
+            response += "**Breakdown by Batch:**\n"
+            
+            for batch_info in batch_breakdown:
+                response += f"• **{batch_info['batch']}**: {batch_info['students']} students\n"
+            
+            response += f"\n📈 **Summary:** There are {total_students} students across all batches in the system."
+            
+            return response
+        except Exception as e:
+            return f"Error calculating accurate total students: {str(e)}"
+
 def get_tools():
     """Get all tools"""
     return [
@@ -669,5 +880,8 @@ def get_tools():
         GetStudentsByBatchTool(),
         GetStudentsBySectionTool(),
         GetContestLeaderboardTool(),
-        MultiCollectionQueryTool()
+        GetCrossBatchContestLeaderboardTool(),
+        GetSectionContestLeaderboardTool(),
+        MultiCollectionQueryTool(),
+        GetAccurateTotalStudentsTool()
     ] 

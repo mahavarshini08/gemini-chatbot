@@ -4,13 +4,13 @@ Test script to demonstrate all-batches behavior
 """
 
 import asyncio
-from app.agent.agent import EnhancedChatbotAgent
+from app.agent.agent import ChatbotAgent
 
 async def test_all_batches_behavior():
     """Test queries with and without specific batch mentions"""
     
     # Initialize the enhanced agent
-    agent = EnhancedChatbotAgent()
+    agent = ChatbotAgent()
     
     # Test queries
     test_queries = [

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
 from app.agent.agent import ChatbotAgent
+from app.services.cache_monitor import start_cache_monitoring, get_cache_monitor_status
 import time
 import json
 
@@ -21,6 +22,9 @@ app.add_middleware(
 
 # Initialize agent
 agent = ChatbotAgent()
+
+# Start automatic cache monitoring
+cache_monitor = start_cache_monitoring(agent.api_service, check_interval=14400)  # Check every 4 hours
 
 class ChatRequest(BaseModel):
     message: str
@@ -161,6 +165,24 @@ async def test_connection():
         return {
             "status": "error",
             "message": f"Connection test failed: {str(e)}"
+        }
+
+@app.get("/api/v1/cache-health")
+async def get_cache_health():
+    """Get cache health status"""
+    try:
+        cache_health = agent.api_service.get_cache_health_status()
+        monitor_status = get_cache_monitor_status()
+        
+        return {
+            "cache_health": cache_health,
+            "monitor_status": monitor_status,
+            "message": "Cache health check completed"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Cache health check failed: {str(e)}"
         }
 
 @app.get("/", response_class=HTMLResponse)

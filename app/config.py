@@ -18,7 +18,7 @@ class Config:
     # Model Configuration
     MODEL_NAME = "gemini-2.5-flash"
     TEMPERATURE = 0.1
-    MAX_OUTPUT_TOKENS = 2048
+    MAX_OUTPUT_TOKENS = 100000
     
     # CORS Configuration
     ALLOW_ORIGINS = ["*"]
