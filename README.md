@@ -1,171 +1,346 @@
-# LeetCode Chatbot
+# 🚀 Enhanced LeetCode Chatbot
 
-An intelligent chatbot for analyzing LeetCode student performance data using Gemini AI and LangChain.
+An intelligent chatbot that can answer complex queries requiring data from multiple collections with smart data access patterns.
 
-## Features
+## ✨ Enhanced Features
 
-- **Database Analysis**: Query and analyze student performance data
-- **Batch & Section Comparison**: Compare different batches and sections by various metrics
-- **Student Analytics**: Find top performers, inactive students, and detailed student information
-- **Contest Analysis**: Analyze contest participation and leaderboards
-- **Advanced Analytics**: Generate insights and trends from the data
+### 🔗 Multi-Collection Queries
+The chatbot can fetch data from multiple collections in a single query and automatically detects when multiple collections are needed:
+- **Batches Collection**: Only accessed when needed for batch/section queries
+- **Contest Questions Collection**: Only accessed for contest details (not student performance)
+- **Students Collection**: Contains all student details with performance in latest 5 contests
+- **Automatic Detection**: The agent determines when a query requires multiple collections
+- **All-Batches Default**: When no specific batch is mentioned, automatically provides data across ALL batches
 
-## Project Structure
+### 🧠 Smart Data Access Patterns
+- **Batches**: Only fetched when asked about number of batches, batch names, or number of sections
+- **Contests**: Only fetched when asked about contest details (names, questions, etc.)
+- **Students**: Contains all student information including performance in latest 5 contests only
 
+### 📊 Enhanced Query Capabilities
+
+#### 1. Total Sections Across All Batches
 ```
-gemini-chatbot/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration settings
-│   ├── models.py            # Pydantic models
-│   ├── agent/
-│   │   ├── __init__.py
-│   │   └── chatbot_agent.py # LangChain agent
-│   ├── api/
-│   │   ├── __init__.py
-│   │   └── routes.py        # API routes
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── api_service.py   # GraphQL API service
-│   └── tools/
-│       ├── __init__.py
-│       └── base_tools.py    # LangChain tools
-├── run.py                   # Application runner
-├── requirements.txt          # Python dependencies
-└── README.md               # This file
+"How many sections are there in total across all batches?"
 ```
+- Fetches from batches collection
+- Sums up section counts from all batches
+- Provides breakdown by batch
 
-## Installation
+#### 2. Contest Information
+```
+"What contests are available?"
+"What questions were asked in the contests?"
+```
+- Fetches contest details only (same across all batches)
+- Does not access student performance data
+- Provides contest names, questions, and general information
+- No batch specification needed since contest details are identical across all batches
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd gemini-chatbot
-   ```
+#### 3. Student Performance (Limited to Latest 5 Contests)
+```
+"What is the performance of student john-doe in batch24-25?"
+```
+- Shows student details and latest 5 contests only
+- Clearly informs about the 5-contest limitation
+- Provides comprehensive student information
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+#### 4. Top Students (Both Rankings)
+```
+"Show me top 50 students in batch24-25"
+"Who are the top 10 students?"  # Automatically across all batches
+```
+- Always provides both rating and problems solved rankings
+- Can work for specific batches or across all batches
+- Automatically defaults to all batches when no specific batch mentioned
+- Shows batch information for each student when querying across all batches
 
-3. **Set up environment variables**:
-   Create a `.env` file in the root directory:
+## 🛠️ Installation & Setup
+
+### Prerequisites
+- Python 3.8+
+- Google API Key for Gemini
+- Backend API URL (GraphQL endpoint)
+
+### Environment Variables
+Create a `.env` file:
    ```env
    GOOGLE_API_KEY=your_google_api_key_here
    BACKEND_API_URL=http://localhost:4000/graphql
-   PORT=3001
-   HOST=0.0.0.0
    ```
 
-## Usage
-
-### Running the Application
-
+### Installation
 ```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the chatbot
 python run.py
 ```
 
-The application will start on `http://localhost:3001` (or the port specified in your `.env` file).
+## 🎯 Usage Examples
 
-### API Endpoints
+### 1. Batch and Section Queries
+```bash
+# Get total sections across all batches
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How many sections are there in total across all batches?"}'
 
-- `GET /` - Root endpoint with API information
-- `GET /docs` - Interactive API documentation (Swagger UI)
-- `GET /api/v1/health` - Health check
-- `GET /api/v1/test-connection` - Test Gemini API connection
-- `POST /api/v1/chat` - Main chat endpoint
-- `GET /api/v1/conversation-history` - Get conversation history
-- `POST /api/v1/clear-history` - Clear conversation history
-- `GET /api/v1/tools` - Get available tools information
-- `GET /api/v1/example-queries` - Get example queries
-
-### Example Usage
-
-```python
-import requests
-
-# Send a chat message
-response = requests.post("http://localhost:3001/api/v1/chat", json={
-    "message": "Show me all available batches"
-})
-
-print(response.json())
+# Get batch information
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What batches are available and how many sections do they have?"}'
 ```
 
-## Available Tools
+### 2. Contest Information Queries
+```bash
+# Get contest information (same across all batches)
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What contests are available?"}'
 
-The chatbot has access to the following tools:
+# Get contest questions
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What questions were asked in the contests?"}'
+```
 
-1. **getAllBatches** - Get all available batches
-2. **getStudentsByBatch** - Get all students in a specific batch
-3. **getStudent** - Get detailed information about a specific student
-4. **getContestLeaderboard** - Get contest leaderboard
-5. **getAllContests** - Get all contests for a batch
-6. **compareSections** - Compare two sections by metrics
-7. **findTopStudents** - Find top students across all batches
-8. **findInactiveStudents** - Find inactive students
+### 3. Student Performance Queries
+```bash
+# Get student performance (latest 5 contests only)
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is the performance of student john-doe in batch24-25?"}'
+```
 
-## Example Queries
+### 4. Top Students Queries
+```bash
+# Get top students by both metrics (specific batch)
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Show me top 50 students in batch24-25"}'
 
-### Batch Analysis
-- "Show me all available batches"
-- "Get all students in batch23-27"
-- "Compare secA and secB in batch24-28 by rating"
+# Get top students across all batches (automatic)
+curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Who are the top 10 students?"}'
+```
 
-### Student Analysis
-- "Get details for student luvitta-stina in batch23-27"
-- "Find top 10 students by rating across all batches"
-- "Find inactive students in batch24-28 who haven't participated in the last 7 days"
+## 📊 API Endpoints
 
-### Contest Analysis
-- "Get all contests for batch23-27"
-- "Show contest leaderboard for weekly-contest-460 in batch23-27"
+### Chat Endpoint
+```http
+POST /api/v1/chat
+Content-Type: application/json
 
-## Configuration
+{
+  "message": "Your question here"
+}
+```
 
-The application uses environment variables for configuration:
+Response:
+```json
+{
+  "success": true,
+  "response": "Answer from the chatbot",
+  "tools_used": 2,
+  "unique_tools": 2,
+  "tool_names": ["getBatchesInfo", "findTopStudentsEnhanced"],
+  "multi_collection": true,
+  "agent_steps": [...]
+}
+```
 
-- `GOOGLE_API_KEY`: Your Google API key for Gemini
-- `BACKEND_API_URL`: URL of your GraphQL backend (default: http://localhost:4000/graphql)
-- `PORT`: Port to run the server on (default: 3001)
-- `HOST`: Host to bind to (default: 0.0.0.0)
+### Statistics Endpoint
+```http
+GET /api/v1/stats
+```
 
-## Development
+### Tools Information
+```http
+GET /api/v1/tools
+```
 
-### Project Structure
+### Agent Capabilities
+```http
+GET /api/v1/capabilities
+```
 
-The project is organized into clean, modular components:
+## 🔧 Available Tools
 
-- **Config**: Centralized configuration management
-- **Models**: Pydantic models for request/response schemas
-- **Services**: Business logic and external API interactions
-- **Tools**: LangChain tools for database operations
-- **Agent**: Main chatbot agent with LangChain integration
-- **API**: FastAPI routes and endpoints
+### 1. `getBatchesInfo`
+- **Purpose**: Get comprehensive batch information
+- **Use when**: Asked about number of batches, batch names, or number of sections
+- **Input**: None required
+- **Output**: Total batches, total sections, breakdown by batch
+
+### 2. `getContestInfo`
+- **Purpose**: Get contest information (not student performance)
+- **Use when**: Asked about contest details, names, questions
+- **Input**: No input required (contest details are same across all batches)
+- **Output**: Contest information, questions, general details
+
+### 3. `getStudentPerformance`
+- **Purpose**: Get student performance with latest 5 contests
+- **Use when**: Asked about specific student performance
+- **Input**: 'batch,username' (e.g., 'batch24-25,john-doe')
+- **Output**: Student details with latest 5 contests only
+
+### 4. `findTopStudentsEnhanced`
+- **Purpose**: Find top students by both rating and problems solved
+- **Use when**: Asked about top students
+- **Input**: 'limit,batch' (e.g., '50,batch24-25' or '10,all')
+- **Output**: Both rating and problems solved rankings
+
+### 5. `getTotalSections`
+- **Purpose**: Get total sections across all batches
+- **Use when**: Asked about total sections
+- **Input**: None required
+- **Output**: Total sections with breakdown
+
+### 6. `multiCollectionQuery`
+- **Purpose**: Handle complex cross-collection queries
+- **Use when**: Complex queries requiring multiple collections
+- **Input**: Natural language question
+- **Output**: Comprehensive answer using multiple tools
+
+## 🚨 Data Limitations
+
+### Student Performance
+- **Limitation**: Only latest 5 contests available
+- **Reason**: Database stores only recent contest data
+- **Response**: System clearly informs about this limitation
+
+### Contest Information
+- **Access Pattern**: Only for contest details, not student performance
+- **Reason**: Separate concerns for better performance
+- **Benefit**: Faster queries when only contest info is needed
+
+### Batch Information
+- **Access Pattern**: Only when needed for batch/section queries
+- **Reason**: Optimize data access
+- **Benefit**: Reduced unnecessary API calls
+
+## 🎨 Web Interface
+
+The chatbot includes a beautiful web interface at `http://localhost:8000` with:
+
+- **Real-time chat**: Interactive chat interface
+- **Enhanced capabilities display**: Shows all available features
+- **Multi-collection indicators**: Shows when queries use multiple collections
+- **Responsive design**: Works on desktop and mobile
+
+## 🔍 Query Examples
+
+### Simple Queries
+```
+"How many batches are there?"
+"What are the batch names?"
+"How many sections are in batch24-25?"
+```
+
+### Complex Queries
+```
+"How many sections are there in total across all batches?"
+"Show me top 50 students in batch24-25"
+"What contests are available?"
+"What is the performance of student john-doe in batch24-25?"
+"Show me top 10 students"  # Automatically across all batches
+```
+
+### Multi-Collection Queries
+```
+"Compare the performance of top students across different batches"
+"Show me contest information and top performers for batch24-25"
+```
+
+## 🛠️ Development
+
+### File Structure
+```
+app/
+├── agent/
+│   └── agent.py                   # Enhanced agent with multi-collection support
+├── tools/
+│   └── tools.py                   # Enhanced tools for smart data access
+├── services/
+│   └── api_service.py             # API service for backend communication
+└── main.py                        # Enhanced FastAPI application
+
+run.py                             # Chatbot runner
+ENHANCED_README.md                 # This file
+```
 
 ### Adding New Tools
+1. Create new tool class in `app/tools/tools.py`
+2. Add to `get_enhanced_tools()` function
+3. Update agent prompt in `app/agent/agent.py`
+4. Test with various queries
 
-To add a new tool:
+### Extending Capabilities
+1. Modify `EnhancedMultiCollectionQueryTool` in `app/tools/tools.py` for new query patterns
+2. Add new data access patterns in the agent prompt in `app/agent/agent.py`
+3. Update the capabilities endpoint response
 
-1. Create a new tool class in `app/tools/base_tools.py`
-2. Inherit from `BaseTool`
-3. Implement the `_run` method
-4. Add the tool to the `get_all_tools()` function
+## 🚀 Performance Benefits
 
-### Adding New API Endpoints
+### Smart Data Access
+- **Reduced API calls**: Only fetch data when needed
+- **Faster responses**: Optimized data access patterns
+- **Better resource usage**: Efficient collection access
 
-To add new endpoints:
+### Multi-Collection Optimization
+- **Automatic detection**: Agent determines when multiple collections are needed
+- **Single query responses**: Complex questions answered efficiently
+- **Reduced latency**: Multiple tools in sequence
+- **Better user experience**: Comprehensive answers
+- **Intelligent tool selection**: Uses the most appropriate tools for each query
 
-1. Add the route to `app/api/routes.py`
-2. Create corresponding Pydantic models in `app/models.py` if needed
+## 🔧 Troubleshooting
 
-## Dependencies
+### Common Issues
 
-Key dependencies include:
+1. **API Connection Error**
+   - Check `BACKEND_API_URL` in `.env`
+   - Ensure backend server is running
 
-- **FastAPI**: Web framework
-- **LangChain**: LLM framework
-- **Google Generative AI**: Gemini integration
-- **Pydantic**: Data validation
-- **Uvicorn**: ASGI server
+2. **Google API Key Error**
+   - Verify `GOOGLE_API_KEY` in `.env`
+   - Check API key permissions
+
+3. **Tool Execution Error**
+   - Check backend API responses
+   - Verify data format expectations
+
+### Debug Endpoints
+```http
+GET /api/v1/test-connection    # Test API connectivity
+GET /api/v1/stats              # View usage statistics
+GET /api/v1/capabilities       # Check agent capabilities
+```
+
+## 📈 Monitoring
+
+### Usage Statistics
+- Total requests processed
+- Average tools per request
+- Multi-collection query rate
+- Tool usage patterns
+
+### Performance Metrics
+- Response times
+- Tool execution success rates
+- Error rates and types
+
+## 🤝 Contributing
+
+1. Follow the existing code structure
+2. Add comprehensive error handling
+3. Include proper documentation
+4. Test with various query patterns
+5. Update this README for new features
+
+## 📄 License
+
+This project is part of the LeetCode tracking system. See the main project license for details. 
