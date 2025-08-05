@@ -867,6 +867,225 @@ class GetAccurateTotalStudentsTool(BaseTool):
         except Exception as e:
             return f"Error calculating accurate total students: {str(e)}"
 
+class GetBatchAnalyticsTool(BaseTool):
+    """Tool to get analytics for a specific batch"""
+    name: str = "getBatchAnalytics"
+    description: str = "Get comprehensive analytics for a specific batch including average ratings, participation rates, and performance metrics. Input format: 'batch_name' (e.g., 'batch24-28')"
+    
+    def _run(self, input_str: str) -> str:
+        try:
+            batch = input_str.strip()
+            if not batch:
+                return "Error: Please provide a batch name (e.g., 'batch24-28')"
+            
+            result = api_service.get_batch_analytics(batch)
+            analytics = result.get("getBatchAnalytics", {})
+            
+            if not analytics:
+                return f"Analytics not found for batch: {batch}"
+            
+            # Format the response nicely
+            response = f"📊 **Analytics for {batch.upper()}**\n\n"
+            
+            # Basic metrics
+            response += f"🏆 **Latest Contest:** {analytics.get('latestContest', 'N/A')}\n"
+            response += f"⭐ **Average Rating:** {analytics.get('averageRating', 'N/A')}\n"
+            response += f"📚 **Average Problems Solved:** {analytics.get('averageSolved', 'N/A')}\n"
+            response += f"📈 **Participation Rate:** {analytics.get('participationRate', 'N/A')}%\n"
+            response += f"🕒 **Last Updated:** {analytics.get('updatedAt', 'N/A')}\n\n"
+            
+            # Top contributors
+            top_contributors = analytics.get('top10Contributors', [])
+            if top_contributors:
+                response += f"🏅 **Top Contributors:**\n"
+                for i, contributor in enumerate(top_contributors[:5], 1):
+                    response += f"{i}. {contributor}\n"
+                response += "\n"
+            
+            # Section-wise data
+            sections = analytics.get('sections', {})
+            if sections and isinstance(sections, dict):
+                response += f"📋 **Section Information:**\n"
+                for section, data in sections.items():
+                    response += f"• {section}: {data}\n"
+                response += "\n"
+            elif sections:
+                response += f"📋 **Section Information:** {sections}\n\n"
+            
+            # Consistency data
+            consistency = analytics.get('consistency', {})
+            if consistency and isinstance(consistency, dict):
+                response += f"📊 **Performance Consistency:**\n"
+                for metric, value in consistency.items():
+                    response += f"• {metric}: {value}\n"
+                response += "\n"
+            elif consistency:
+                response += f"📊 **Performance Consistency:** {consistency}\n\n"
+            
+            # Recent contests
+            recent_contests = analytics.get('recentContests', {})
+            if recent_contests and isinstance(recent_contests, dict):
+                response += f"🏆 **Recent Contest Performance:**\n"
+                for contest, data in recent_contests.items():
+                    response += f"• {contest}: {data}\n"
+            elif recent_contests:
+                response += f"🏆 **Recent Contest Performance:** {recent_contests}\n"
+            
+            return response
+            
+        except Exception as e:
+            return f"Error fetching batch analytics: {str(e)}"
+
+class GetSectionAnalyticsTool(BaseTool):
+    """Tool to get analytics for a specific section within a batch"""
+    name: str = "getSectionAnalytics"
+    description: str = "Get detailed analytics for a specific section including average rating, participation rate, and performance metrics. Input format: 'batch_name,section_name' (e.g., 'batch24-28,CSE-A')"
+    
+    def _run(self, input_str: str) -> str:
+        try:
+            parts = input_str.split(',')
+            if len(parts) != 2:
+                return "Error: Input format should be 'batch_name,section_name' (e.g., 'batch24-28,CSE-A')"
+            
+            batch_name, section_name = [s.strip() for s in parts]
+            
+            # Get batch analytics first
+            result = api_service.get_batch_analytics(batch_name)
+            analytics = result.get("getBatchAnalytics", {})
+            
+            if not analytics:
+                return f"Analytics not found for batch: {batch_name}"
+            
+            # Extract section-specific data
+            sections = analytics.get('sections', {})
+            if not sections or not isinstance(sections, dict):
+                return f"Section data not available for batch: {batch_name}"
+            
+            section_data = sections.get(section_name)
+            if not section_data:
+                return f"Section '{section_name}' not found in batch '{batch_name}'. Available sections: {list(sections.keys())}"
+            
+            # Format section-specific analytics
+            response = f"📊 **Section Analytics: {section_name} in {batch_name.upper()}**\n\n"
+            
+            # Section metrics
+            if isinstance(section_data, dict):
+                response += f"⭐ **Average Rating:** {section_data.get('averageRating', 'N/A')}\n"
+                response += f"📚 **Average Problems Solved:** {section_data.get('averageSolved', 'N/A')}\n"
+                response += f"📈 **Participation Rate:** {section_data.get('participationRate', 'N/A')}%\n"
+                response += f"👥 **Student Count:** {section_data.get('studentCount', 'N/A')}\n"
+                response += f"🏆 **Top Performers:** {section_data.get('topPerformers', 'N/A')}\n"
+            else:
+                response += f"📋 **Section Data:** {section_data}\n"
+            
+            # Add batch context
+            response += f"\n📊 **Batch Context:**\n"
+            response += f"🏆 Latest Contest: {analytics.get('latestContest', 'N/A')}\n"
+            response += f"⭐ Batch Average Rating: {analytics.get('averageRating', 'N/A')}\n"
+            response += f"📈 Batch Participation Rate: {analytics.get('participationRate', 'N/A')}%\n"
+            response += f"🕒 Last Updated: {analytics.get('updatedAt', 'N/A')}\n"
+            
+            return response
+            
+        except Exception as e:
+            return f"Error fetching section analytics: {str(e)}"
+
+class GetAllAnalyticsTool(BaseTool):
+    """Tool to get analytics for all batches"""
+    name: str = "getAllAnalytics"
+    description: str = "Get comprehensive analytics for all batches including average ratings, participation rates, and performance metrics. No input required."
+    
+    def _run(self, input_str: str = "") -> str:
+        try:
+            result = api_service.get_all_analytics()
+            all_analytics = result.get("getAllAnalytics", [])
+            
+            if not all_analytics:
+                return "No analytics data found for any batches."
+            
+            response = f"📊 **Analytics for All Batches**\n\n"
+            
+            for analytics in all_analytics:
+                batch = analytics.get('batch', 'Unknown')
+                response += f"🏆 **{batch.upper()}**\n"
+                response += f"⭐ Average Rating: {analytics.get('averageRating', 'N/A')}\n"
+                response += f"📚 Average Problems Solved: {analytics.get('averageSolved', 'N/A')}\n"
+                response += f"📈 Participation Rate: {analytics.get('participationRate', 'N/A')}%\n"
+                response += f"🏆 Latest Contest: {analytics.get('latestContest', 'N/A')}\n"
+                response += f"🕒 Last Updated: {analytics.get('updatedAt', 'N/A')}\n\n"
+                
+                # Top contributors for this batch
+                top_contributors = analytics.get('top10Contributors', [])
+                if top_contributors:
+                    response += f"🏅 **Top Contributors:**\n"
+                    for i, contributor in enumerate(top_contributors[:3], 1):
+                        response += f"{i}. {contributor}\n"
+                    response += "\n"
+                
+                response += "─" * 40 + "\n\n"
+            
+            return response
+            
+        except Exception as e:
+            return f"Error fetching all analytics: {str(e)}"
+
+class GetAnalyticsComparisonTool(BaseTool):
+    """Tool to compare analytics between batches"""
+    name: str = "getAnalyticsComparison"
+    description: str = "Compare analytics between different batches. Input format: 'batch1,batch2' (e.g., 'batch24-28,batch23-27')"
+    
+    def _run(self, input_str: str) -> str:
+        try:
+            parts = input_str.split(',')
+            if len(parts) != 2:
+                return "Error: Please provide exactly two batch names separated by comma (e.g., 'batch24-28,batch23-27')"
+            
+            batch1, batch2 = [b.strip() for b in parts]
+            
+            # Get analytics for both batches
+            result1 = api_service.get_batch_analytics(batch1)
+            result2 = api_service.get_batch_analytics(batch2)
+            
+            analytics1 = result1.get("getBatchAnalytics", {})
+            analytics2 = result2.get("getBatchAnalytics", {})
+            
+            if not analytics1:
+                return f"Analytics not found for batch: {batch1}"
+            if not analytics2:
+                return f"Analytics not found for batch: {batch2}"
+            
+            response = f"📊 **Analytics Comparison: {batch1.upper()} vs {batch2.upper()}**\n\n"
+            
+            # Compare key metrics
+            metrics = [
+                ('averageRating', 'Average Rating', '⭐'),
+                ('averageSolved', 'Average Problems Solved', '📚'),
+                ('participationRate', 'Participation Rate', '📈'),
+                ('latestContest', 'Latest Contest', '🏆')
+            ]
+            
+            for metric_key, metric_name, emoji in metrics:
+                value1 = analytics1.get(metric_key, 'N/A')
+                value2 = analytics2.get(metric_key, 'N/A')
+                
+                response += f"{emoji} **{metric_name}:**\n"
+                response += f"• {batch1.upper()}: {value1}\n"
+                response += f"• {batch2.upper()}: {value2}\n\n"
+            
+            # Compare top contributors
+            contributors1 = analytics1.get('top10Contributors', [])
+            contributors2 = analytics2.get('top10Contributors', [])
+            
+            if contributors1 or contributors2:
+                response += f"🏅 **Top Contributors Comparison:**\n"
+                response += f"• {batch1.upper()}: {', '.join(contributors1[:3]) if contributors1 else 'None'}\n"
+                response += f"• {batch2.upper()}: {', '.join(contributors2[:3]) if contributors2 else 'None'}\n\n"
+            
+            return response
+            
+        except Exception as e:
+            return f"Error comparing analytics: {str(e)}"
+
 def get_tools():
     """Get all tools"""
     return [
@@ -883,5 +1102,9 @@ def get_tools():
         GetCrossBatchContestLeaderboardTool(),
         GetSectionContestLeaderboardTool(),
         MultiCollectionQueryTool(),
-        GetAccurateTotalStudentsTool()
+        GetAccurateTotalStudentsTool(),
+        GetBatchAnalyticsTool(),
+        GetSectionAnalyticsTool(),
+        GetAllAnalyticsTool(),
+        GetAnalyticsComparisonTool()
     ] 

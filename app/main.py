@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from app.agent.agent import ChatbotAgent
 from app.services.cache_monitor import start_cache_monitoring, get_cache_monitor_status
+from app.middleware.rate_limiter import rate_limit_middleware, rate_limiter
 import time
 import json
 
@@ -19,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add rate limiting middleware
+app.middleware("http")(rate_limit_middleware)
 
 # Initialize agent
 agent = ChatbotAgent()
@@ -183,6 +187,26 @@ async def get_cache_health():
         return {
             "status": "error",
             "message": f"Cache health check failed: {str(e)}"
+        }
+
+@app.get("/api/v1/rate-limit-status")
+async def get_rate_limit_status():
+    """Get rate limit status"""
+    try:
+        remaining = rate_limiter.get_remaining_requests()
+        return {
+            "rate_limit_enabled": Config.RATE_LIMIT_ENABLED,
+            "limits": {
+                "requests_per_minute": Config.MAX_REQUESTS_PER_MINUTE,
+                "requests_per_day": Config.MAX_REQUESTS_PER_DAY
+            },
+            "remaining": remaining,
+            "message": "Rate limit status retrieved"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Rate limit status failed: {str(e)}"
         }
 
 @app.get("/", response_class=HTMLResponse)

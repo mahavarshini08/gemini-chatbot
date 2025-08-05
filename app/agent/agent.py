@@ -5,6 +5,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import Config
 from app.tools.tools import get_tools
+from app.utils.error_handler import ErrorHandler
 import json
 import re
 
@@ -26,6 +27,10 @@ class ChatbotAgent:
         self.conversation_history = []
         self.max_history_size = 50  # Limit conversation history to prevent memory issues
         
+        # Initialize API service for cache monitoring
+        from app.services.api_service import ApiService
+        self.api_service = ApiService()
+        
         # Prompt for multi-collection queries
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a LeetCode tracking assistant. You MUST use tools to get data. Never make up responses unless it's not related to my databse.
@@ -44,10 +49,14 @@ Available tools:
 - getContestLeaderboard: Get contest leaderboard for a specific contest
 - getCrossBatchContestLeaderboard: Get contest leaderboard across all batches
 - getSectionContestLeaderboard: Get contest leaderboard for a specific section
+- getBatchAnalytics: Get comprehensive analytics for a specific batch
+- getSectionAnalytics: Get detailed analytics for a specific section within a batch
+- getAllAnalytics: Get analytics for all batches
+- getAnalyticsComparison: Compare analytics between different batches
 - multiCollectionQuery: Handle complex queries
 
 CRITICAL RULES:
-1. ALWAYS use tools to get data - never ask for clarification
+1. ALWAYS use tools to get data - don't ask for clarification
 2. For "how many students?" or "total students" or "number of students" → Use getAccurateTotalStudents
 3. For "how many batches?" or "batch information" or "batch details" → Use getBatchesInfo  
 4. For "what contests?" or "available contests" → Use getContestInfo
@@ -82,6 +91,12 @@ CRITICAL: For ANY query about specific student performance or contest details fo
 - If asking about "contest performance for [username]" → Use getStudentPerformance with 'batch,username'
 - If asking about "student [username] performance" → Use getStudentPerformance with 'batch,username'
 
+CRITICAL: For ANY query about analytics or batch performance metrics, use the appropriate analytics tool:
+- If asking about "analytics for [batch]" or "batch analytics" → Use getBatchAnalytics with 'batch_name'
+- If asking about "section analytics" or "analytics for section [section] in [batch]" → Use getSectionAnalytics with 'batch_name,section_name'
+- If asking about "all analytics" or "analytics for all batches" → Use getAllAnalytics (no input)
+- If asking about "compare analytics" or "analytics comparison" → Use getAnalyticsComparison with 'batch1,batch2'
+
 Tool formats:
 - getBatchesInfo: No input
 - getContestInfo: No input
@@ -96,6 +111,10 @@ Tool formats:
 - getContestLeaderboard: 'batch_name,contest_title' (e.g., 'batch24-28,Weekly Contest 460')
 - getCrossBatchContestLeaderboard: 'contest_title' (e.g., 'Weekly Contest 460')
 - getSectionContestLeaderboard: 'batch_name,section_name,contest_title' (e.g., 'batch24-28,CSE-A,Weekly Contest 460')
+- getBatchAnalytics: 'batch_name' (e.g., 'batch24-28')
+- getSectionAnalytics: 'batch_name,section_name' (e.g., 'batch24-28,CSE-A')
+- getAllAnalytics: No input
+- getAnalyticsComparison: 'batch1,batch2' (e.g., 'batch24-28,batch23-27')
 - multiCollectionQuery: natural language
 
 IMPORTANT: When asked about top students, always use findTopStudents with 'limit,all' to get data from all batches. 
@@ -226,9 +245,24 @@ IMPORTANT: Once you get a valid response from a tool, STOP calling additional to
                     "Get total students across all batches",
                     "Get total sections across all batches",
                     "Get top students by rating and problems solved",
-                    "Get contest information and participation"
+                    "Get contest information and participation",
+                    "Get analytics for all batches",
+                    "Get batch-specific analytics"
                 ],
-                "suggestion": "I can provide aggregate data and individual batch statistics, but cannot perform complex statistical analysis across batches."
+                "suggestion": "I can provide aggregate data and individual batch statistics, but cannot perform complex statistical analysis across batches.",
+                "provide_data": True
+            },
+            
+            # Analytics queries
+            "analytics.*batch": {
+                "can_do": [
+                    "Get batch analytics for specific batches",
+                    "Get analytics for all batches",
+                    "Compare analytics between batches",
+                    "Get performance metrics and statistics"
+                ],
+                "suggestion": "I can provide analytics data for individual batches or all batches, but cannot perform complex cross-batch analytics.",
+                "provide_data": True
             }
         }
         
@@ -256,7 +290,9 @@ IMPORTANT: Once you get a valid response from a tool, STOP calling additional to
                "3. Get student performance (latest 5 contests only)\n" + \
                "4. Get top students by rating and problems solved\n" + \
                "5. Get contest leaderboards for specific batches\n" + \
-               "6. Get section-specific data\n\n" + \
+               "6. Get section-specific data\n" + \
+               "7. Get batch analytics and performance metrics\n" + \
+               "8. Get analytics for all batches\n\n" + \
                "Try asking for any of these alternatives instead."
 
     def _provide_actual_data(self, message: str) -> str:
@@ -383,18 +419,29 @@ IMPORTANT: Once you get a valid response from a tool, STOP calling additional to
             }
             
         except Exception as e:
-            # Try to provide a helpful response even if tool calling fails
-            error_msg = f"Error processing message: {str(e)}"
-            self.conversation_history.append({"role": "assistant", "content": error_msg})
+            # Handle different types of errors with user-friendly messages
+            error_str = str(e)
+            
+            # Check for rate limiting errors
+            if "429" in error_str or "quota" in error_str.lower() or "rate limit" in error_str.lower():
+                error_info = ErrorHandler.format_rate_limit_error(error_str)
+                user_friendly_response = ErrorHandler.create_user_friendly_response(error_info)
+            else:
+                # Handle other types of errors
+                error_info = ErrorHandler.format_general_error(error_str)
+                user_friendly_response = ErrorHandler.create_user_friendly_response(error_info)
+            
+            self.conversation_history.append({"role": "assistant", "content": user_friendly_response})
             
             return {
                 "success": False,
-                "response": error_msg,
+                "response": user_friendly_response,
                 "tools_used": 0,
                 "unique_tools": 0,
                 "tool_names": [],
                 "is_multi_collection": False,
-                "agent_steps": []
+                "agent_steps": [],
+                "error_type": error_info.get("error_type", "unknown")
             }
     
     def get_conversation_history(self) -> List[Dict[str, str]]:

@@ -560,3 +560,73 @@ class ApiService:
         self._update_cache("contest_details", cached_data)
         
         return result 
+    
+    def get_batch_analytics(self, batch: str) -> Dict:
+        """Get analytics for a specific batch with caching"""
+        # Try to get from cache first
+        cached_data = self._get_from_cache("analytics")
+        if cached_data and batch in cached_data:
+            return cached_data[batch]
+        
+        # If not in cache, fetch from API
+        query = """
+        query GetBatchAnalytics($batch: String!) {
+            getBatchAnalytics(batch: $batch) {
+                batch
+                latestContest
+                averageRating
+                averageSolved
+                participationRate
+                top10Contributors
+                sectionWiseTotalSolved
+                consistency
+                recentContests
+                updatedAt
+                sections
+            }
+        }
+        """
+        
+        result = self.make_graphql_request(query, {"batch": batch})
+        
+        # Update cache
+        cached_data = self._get_from_cache("analytics") or {}
+        cached_data[batch] = result
+        self._update_cache("analytics", cached_data)
+        
+        return result
+    
+    def get_all_analytics(self) -> Dict:
+        """Get analytics for all batches with caching"""
+        # Try to get from cache first
+        cached_data = self._get_from_cache("analytics")
+        if cached_data and "all" in cached_data:
+            return cached_data["all"]
+        
+        # If not in cache, fetch from API
+        query = """
+        query GetAllAnalytics {
+            getAllAnalytics {
+                batch
+                latestContest
+                averageRating
+                averageSolved
+                participationRate
+                top10Contributors
+                sectionWiseTotalSolved
+                consistency
+                recentContests
+                updatedAt
+                sections
+            }
+        }
+        """
+        
+        result = self.make_graphql_request(query)
+        
+        # Update cache
+        cached_data = self._get_from_cache("analytics") or {}
+        cached_data["all"] = result
+        self._update_cache("analytics", cached_data)
+        
+        return result 
